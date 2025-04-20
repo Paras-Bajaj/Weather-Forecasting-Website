@@ -15,7 +15,7 @@ cache = Cache(app, config={
 })
 
 # API configuration
-API_KEY = 'a9d760831c42b50115855cb5e828461b'
+API_KEY = 'use your key here'
 GEOCODE_URL = "http://api.openweathermap.org/geo/1.0/direct"
 REVERSE_GEOCODE_URL = "http://api.openweathermap.org/geo/1.0/reverse"
 CURRENT_WEATHER_URL = "http://api.openweathermap.org/data/2.5/weather"
