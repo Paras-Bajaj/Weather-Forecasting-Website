@@ -960,7 +960,7 @@ async function loadPopularCities() {
 
     for (const city of popularCities) {
         try {
-            const response = await fetch(`http://localhost:5000/get_weather`, {
+            const response = await fetch(`/get_weather`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1076,7 +1076,7 @@ async function getWeatherByCity(city) {
     showLoading();
     
     try {
-        const response = await fetch('http://localhost:5000/get_weather', {
+        const response = await fetch('/get_weather', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1108,7 +1108,7 @@ async function getWeatherByCoords(lat, lon) {
     showLoading();
     
     try {
-        const response = await fetch(`http://localhost:5000/get_weather?lat=${lat}&lon=${lon}`);
+        const response = await fetch(`/get_weather?lat=${lat}&lon=${lon}`);
         if (!response.ok) {
             throw await response.json();
         }
@@ -1130,7 +1130,7 @@ async function getWeatherByCoords(lat, lon) {
 // Fetch hourly forecast data
 async function fetchHourlyForecast(lat, lon) {
     try {
-        const response = await fetch(`http://localhost:5000/get_hourly_forecast?lat=${lat}&lon=${lon}`);
+        const response = await fetch(`/get_hourly_forecast?lat=${lat}&lon=${lon}`);
         if (!response.ok) {
             console.error('Failed to fetch hourly forecast');
             hourlyForecast.style.display = 'none';
@@ -1495,3 +1495,4 @@ function showError(message) {
     </script>
 </body>
 </html>
+
