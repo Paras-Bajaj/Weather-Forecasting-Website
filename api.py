@@ -5,8 +5,10 @@ import requests
 from datetime import datetime, timedelta
 import os
 
-app = Flask(__name__)
-CORS(app)
+app = Flask(__name__, static_folder='.', static_url_path='')
+
+# Fix CORS configuration - allow all origins for simplicity
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Configure cache
 cache = Cache(app, config={
@@ -16,18 +18,21 @@ cache = Cache(app, config={
 
 # API configuration - Use environment variable for security
 API_KEY = os.environ.get('OPENWEATHER_API_KEY', 'a9d760831c42b50115855cb5e828461b')
-GEOCODE_URL = "http://api.openweathermap.org/geo/1.0/direct"
-REVERSE_GEOCODE_URL = "http://api.openweathermap.org/geo/1.0/reverse"
-CURRENT_WEATHER_URL = "http://api.openweathermap.org/data/2.5/weather"
-FORECAST_URL = "http://api.openweathermap.org/data/2.5/forecast"
-AIR_POLLUTION_URL = "http://api.openweathermap.org/data/2.5/air_pollution"
+if not API_KEY or API_KEY == 'a9d760831c42b50115855cb5e828461b':
+    print("WARNING: Using default API key. Please set OPENWEATHER_API_KEY environment variable.")
+
+GEOCODE_URL = "https://api.openweathermap.org/geo/1.0/direct"
+REVERSE_GEOCODE_URL = "https://api.openweathermap.org/geo/1.0/reverse"
+CURRENT_WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
+FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast"
+AIR_POLLUTION_URL = "https://api.openweathermap.org/data/2.5/air_pollution"
 
 # Serve the main HTML file
 @app.route('/')
 def home():
     return send_from_directory('.', 'index.html')
 
-# Serve static files (if any)
+# Serve static files
 @app.route('/<path:path>')
 def serve_static(path):
     return send_from_directory('.', path)
@@ -36,11 +41,14 @@ def serve_static(path):
 def get_weather():
     try:
         # Check if API key is available
-        if not API_KEY or API_KEY == 'a9d760831c42b50115855cb5e828461b':
-            return jsonify({'error': 'OpenWeather API key not configured properly'}), 500
+        if not API_KEY:
+            return jsonify({'error': 'OpenWeather API key not configured'}), 500
             
         if request.method == 'POST':
             data = request.get_json()
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+                
             city = data.get('city')
             
             if not city:
@@ -99,8 +107,8 @@ def get_weather():
 def get_hourly_forecast():
     try:
         # Check if API key is available
-        if not API_KEY or API_KEY == 'a9d760831c42b50115855cb5e828461b':
-            return jsonify({'error': 'OpenWeather API key not configured properly'}), 500
+        if not API_KEY:
+            return jsonify({'error': 'OpenWeather API key not configured'}), 500
             
         lat = request.args.get('lat')
         lon = request.args.get('lon')
@@ -136,7 +144,7 @@ def get_geocode_data(city):
     city = city.strip()
     params = {
         'q': city,
-        'limit': 10,  # Get more results to find the best match
+        'limit': 10,
         'appid': API_KEY
     }
     try:
@@ -148,7 +156,7 @@ def get_geocode_data(city):
             print(f"No geocoding results for city: {city}")
             return None
             
-        # Find the best match (exact city name match if possible)
+        # Find the best match
         for result in data:
             if result.get('name', '').lower() == city.lower():
                 return {
@@ -176,7 +184,7 @@ def get_reverse_geocode_data(lat, lon):
     params = {
         'lat': lat,
         'lon': lon,
-        'limit': 10,  # Get multiple results to find the most accurate
+        'limit': 10,
         'appid': API_KEY
     }
     try:
@@ -187,19 +195,17 @@ def get_reverse_geocode_data(lat, lon):
         if not data:
             return None
             
-        # Prioritize results with 'local_names' and higher accuracy
+        # Find the most relevant result
         for result in sorted(data, key=lambda x: -x.get('importance', 0)):
-            # Skip administrative areas that might be too broad
             if result.get('local_names'):
                 name = result['local_names'].get('en') or result.get('name')
-                print(f"Reverse geocode selected: {name} (Type: {result.get('type')}, Importance: {result.get('importance')})")
                 return {
                     'name': name,
                     'country': result.get('country', ''),
                     'state': result.get('state', '')
                 }
         
-        # Fallback to first result if no local names found
+        # Fallback to first result
         return {
             'name': data[0].get('name'),
             'country': data[0].get('country', ''),
@@ -224,12 +230,12 @@ def fetch_current_weather(lat, lon):
     return {
         'temp': round(data['main']['temp'], 1),
         'feels_like': round(data['main']['feels_like'], 1),
-        'description': data['weather'][0]['description'].capitalize(),
+        'description': data['weather'][0]['description'],
         'icon': data['weather'][0]['icon'],
         'humidity': data['main']['humidity'],
-        'wind': round(data['wind']['speed'] * 3.6, 1),  # Convert to km/h
+        'wind': round(data['wind']['speed'] * 3.6, 1),
         'pressure': data['main']['pressure'],
-        'visibility': round(data.get('visibility', 0) / 1000, 1),  # Convert to km
+        'visibility': round(data.get('visibility', 0) / 1000, 1),
         'sunrise': datetime.fromtimestamp(data['sys']['sunrise']).strftime('%H:%M'),
         'sunset': datetime.fromtimestamp(data['sys']['sunset']).strftime('%H:%M'),
         'observation_time': datetime.fromtimestamp(data['dt']).strftime('%H:%M UTC')
@@ -240,14 +246,13 @@ def fetch_5day_forecast(lat, lon):
         'lat': lat,
         'lon': lon,
         'units': 'metric',
-        'cnt': 40,  # 5 days * 8 forecasts per day
         'appid': API_KEY
     }
     response = requests.get(FORECAST_URL, params=params, timeout=10)
     response.raise_for_status()
     data = response.json()
     
-    # Group by day and get daily min/max
+    # Group by day
     daily_forecasts = {}
     for item in data['list']:
         date = datetime.fromtimestamp(item['dt']).strftime('%Y-%m-%d')
@@ -271,7 +276,7 @@ def fetch_5day_forecast(lat, lon):
     
     for date, values in daily_forecasts.items():
         if date == today:
-            continue  # Skip today since we already have current weather
+            continue
             
         forecast_days.append({
             'date': date,
@@ -279,10 +284,10 @@ def fetch_5day_forecast(lat, lon):
             'temp_min': round(values['temp_min'], 1),
             'temp_max': round(values['temp_max'], 1),
             'main_condition': max(set(values['conditions']), key=values['conditions'].count),
-            'icon': next(iter(values['icons']))  # Get first icon
+            'icon': next(iter(values['icons']))
         })
     
-    return forecast_days[:5]  # Return next 5 days
+    return forecast_days[:5]
 
 def fetch_air_quality(lat, lon):
     params = {
@@ -313,15 +318,14 @@ def fetch_air_quality(lat, lon):
             'components': data['list'][0]['components']
         }
     except requests.exceptions.RequestException as e:
-        print(f"Air quality fetch error for lat {lat}, lon {lon}: {str(e)}")  # Debug log
+        print(f"Air quality fetch error: {str(e)}")
         return None
 
-# Error handler for 404
+# Error handlers
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Endpoint not found'}), 404
 
-# Error handler for 500
 @app.errorhandler(500)
 def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
@@ -334,4 +338,5 @@ def health_check():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('DEBUG', 'False').lower() == 'true'
+    print(f"Starting server on port {port} with debug={debug}")
     app.run(host='0.0.0.0', port=port, debug=debug)
