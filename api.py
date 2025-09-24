@@ -227,18 +227,29 @@ def fetch_current_weather(lat, lon):
     response.raise_for_status()
     data = response.json()
     
+    # Get timezone offset from the API response (in seconds)
+    timezone_offset = data.get('timezone', 0)
+    
+    # Convert sunrise and sunset times using the correct timezone offset
+    sunrise_utc = datetime.utcfromtimestamp(data['sys']['sunrise'])
+    sunset_utc = datetime.utcfromtimestamp(data['sys']['sunset'])
+    
+    # Apply the timezone offset
+    sunrise_local = sunrise_utc + timedelta(seconds=timezone_offset)
+    sunset_local = sunset_utc + timedelta(seconds=timezone_offset)
+    
     return {
         'temp': round(data['main']['temp'], 1),
         'feels_like': round(data['main']['feels_like'], 1),
         'description': data['weather'][0]['description'],
         'icon': data['weather'][0]['icon'],
         'humidity': data['main']['humidity'],
-        'wind': round(data['wind']['speed'] * 3.6, 1),
+        'wind': round(data['wind']['speed'] * 3.6, 1),  # Convert m/s to km/h
         'pressure': data['main']['pressure'],
         'visibility': round(data.get('visibility', 0) / 1000, 1),
-        'sunrise': datetime.fromtimestamp(data['sys']['sunrise']).strftime('%H:%M'),
-        'sunset': datetime.fromtimestamp(data['sys']['sunset']).strftime('%H:%M'),
-        'observation_time': datetime.fromtimestamp(data['dt']).strftime('%H:%M UTC')
+        'sunrise': sunrise_local.strftime('%H:%M'),
+        'sunset': sunset_local.strftime('%H:%M'),
+        'observation_time': datetime.utcfromtimestamp(data['dt']).strftime('%H:%M UTC')
     }
 
 def fetch_5day_forecast(lat, lon):
@@ -283,8 +294,8 @@ def fetch_5day_forecast(lat, lon):
             'day_name': datetime.strptime(date, '%Y-%m-%d').strftime('%A'),
             'temp_min': round(values['temp_min'], 1),
             'temp_max': round(values['temp_max'], 1),
-            'main_condition': max(set(values['conditions']), key=values['conditions'].count),
-            'icon': next(iter(values['icons']))
+            'main_condition': max(set(values['conditions']), key=values['conditions'].count) if values['conditions'] else 'Clear',
+            'icon': next(iter(values['icons'])) if values['icons'] else '01d'
         })
     
     return forecast_days[:5]
