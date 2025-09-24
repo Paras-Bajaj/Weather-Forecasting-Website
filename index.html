@@ -907,592 +907,574 @@
     </div>
      
     <script>
-        // DOM Elements
-const welcomeScreen = document.getElementById('welcome-screen');
-const weatherApp = document.getElementById('weather-app');
-const searchOption = document.getElementById('search-option');
-const locationOption = document.getElementById('location-option');
-const popularCitiesGrid = document.getElementById('popular-cities-grid');
-const hourlyForecast = document.getElementById('hourly-forecast');
-const hourlyScroll = document.getElementById('hourly-scroll');
-const searchBtn = document.getElementById('search-btn');
-const locationBtn = document.getElementById('location-btn');
-const cityInput = document.getElementById('city-input');
-const weatherContent = document.getElementById('weather-content');
-const errorMessage = document.getElementById('error-message');
-const loadingIndicator = document.getElementById('loading');
-const celsiusBtn = document.getElementById('celsius-btn');
-const fahrenheitBtn = document.getElementById('fahrenheit-btn');
+    // DOM Elements
+    const welcomeScreen = document.getElementById('welcome-screen');
+    const weatherApp = document.getElementById('weather-app');
+    const searchOption = document.getElementById('search-option');
+    const locationOption = document.getElementById('location-option');
+    const popularCitiesGrid = document.getElementById('popular-cities-grid');
+    const hourlyForecast = document.getElementById('hourly-forecast');
+    const hourlyScroll = document.getElementById('hourly-scroll');
+    const searchBtn = document.getElementById('search-btn');
+    const locationBtn = document.getElementById('location-btn');
+    const cityInput = document.getElementById('city-input');
+    const weatherContent = document.getElementById('weather-content');
+    const errorMessage = document.getElementById('error-message');
+    const loadingIndicator = document.getElementById('loading');
+    const celsiusBtn = document.getElementById('celsius-btn');
+    const fahrenheitBtn = document.getElementById('fahrenheit-btn');
 
-// App State
-let currentData = null;
-let useCelsius = true;
-let weatherChart = null;
+    // App State
+    let currentData = null;
+    let useCelsius = true;
+    let weatherChart = null;
 
-// Initialize the app
-document.addEventListener('DOMContentLoaded', () => {
-    loadPopularCities();
-    
-    // Set up event listeners
-    searchOption.addEventListener('click', showSearchInterface);
-    locationOption.addEventListener('click', getWeatherByLocation);
-    searchBtn.addEventListener('click', getWeatherByCityInput);
-    locationBtn.addEventListener('click', getWeatherByLocation);
-    cityInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') getWeatherByCityInput();
+    // Initialize the app
+    document.addEventListener('DOMContentLoaded', () => {
+        loadPopularCities();
+        
+        // Set up event listeners
+        searchOption.addEventListener('click', showSearchInterface);
+        locationOption.addEventListener('click', getWeatherByLocation);
+        searchBtn.addEventListener('click', getWeatherByCityInput);
+        locationBtn.addEventListener('click', getWeatherByLocation);
+        cityInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') getWeatherByCityInput();
+        });
+        celsiusBtn.addEventListener('click', () => setTemperatureUnit(true));
+        fahrenheitBtn.addEventListener('click', () => setTemperatureUnit(false));
     });
-    celsiusBtn.addEventListener('click', () => setTemperatureUnit(true));
-    fahrenheitBtn.addEventListener('click', () => setTemperatureUnit(false));
-});
 
-// Load weather for popular cities
-async function loadPopularCities() {
-    const popularCities = [
-        { name: "New York", country: "US" },
-        { name: "London", country: "GB" },
-        { name: "Tokyo", country: "JP" },
-        { name: "Paris", country: "FR" },
-        { name: "Dubai", country: "AE" },
-        { name: "Sydney", country: "AU" },
-        { name: "Beijing", country: "CN" },
-        { name: "Mumbai", country: "IN" }
-    ];
+    // Load weather for popular cities
+    async function loadPopularCities() {
+        const popularCities = [
+            { name: "New York", country: "US" },
+            { name: "London", country: "GB" },
+            { name: "Tokyo", country: "JP" },
+            { name: "Paris", country: "FR" },
+            { name: "Dubai", country: "AE" },
+            { name: "Sydney", country: "AU" },
+            { name: "Beijing", country: "CN" },
+            { name: "Mumbai", country: "IN" }
+        ];
 
-    for (const city of popularCities) {
+        for (const city of popularCities) {
+            try {
+                const response = await fetch(`/get_weather`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ city: city.name })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch weather for ${city.name}`);
+                }
+                
+                const data = await response.json();
+                
+                // Validate data structure
+                if (!data.current || typeof data.current.temp !== 'number') {
+                    throw new Error(`Invalid temperature data for ${city.name}`);
+                }
+                
+                const cityCard = document.createElement('div');
+                cityCard.className = 'city-card';
+                cityCard.innerHTML = `
+                    <h3>${data.location.city}, ${data.location.country}</h3>
+                    <div class="city-weather">
+                        <div class="city-temp">${Math.round(data.current.temp)}°C</div>
+                        <img class="city-icon" src="https://openweathermap.org/img/wn/${data.current.icon}@2x.png" alt="${data.current.description}">
+                    </div>
+                    <div>${capitalizeFirstLetter(data.current.description)}</div>
+                    <button class="city-select-btn"><i class="fas fa-cloud-sun"></i> View Weather</button>
+                `;
+                
+                cityCard.querySelector('.city-select-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showWeatherApp();
+                    displayWeather(data);
+                    fetchHourlyForecast(data.location.coordinates.lat, data.location.coordinates.lon);
+                });
+                
+                cityCard.addEventListener('click', () => {
+                    showWeatherApp();
+                    displayWeather(data);
+                    fetchHourlyForecast(data.location.coordinates.lat, data.location.coordinates.lon);
+                });
+                
+                popularCitiesGrid.appendChild(cityCard);
+            } catch (error) {
+                console.error(`Error loading weather for ${city.name}:`, error.message);
+                const failedCard = document.createElement('div');
+                failedCard.className = 'city-card';
+                failedCard.innerHTML = `
+                    <h3>${city.name}, ${city.country}</h3>
+                    <div style="color: var(--danger)">Weather data unavailable</div>
+                    <button class="city-select-btn" onclick="getWeatherByCity('${city.name}')"><i class="fas fa-cloud-sun"></i> Try Again</button>
+                `;
+                popularCitiesGrid.appendChild(failedCard);
+            }
+        }
+    }
+
+    // Show search interface
+    function showSearchInterface() {
+        showWeatherApp();
+        cityInput.focus();
+    }
+
+    // Show weather app and hide welcome screen
+    function showWeatherApp() {
+        welcomeScreen.style.display = 'none';
+        weatherApp.style.display = 'block';
+    }
+
+    // Get weather by city input
+    function getWeatherByCityInput() {
+        const city = cityInput.value.trim();
+        if (!city) {
+            showError('Please enter a city name');
+            return;
+        }
+        getWeatherByCity(city);
+    }
+
+    // Get weather by current location
+    function getWeatherByLocation() {
+        if (!navigator.geolocation) {
+            showError('Geolocation is not supported by your browser');
+            return;
+        }
+        
+        showLoading();
+        
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                getWeatherByCoords(lat, lon);
+                showWeatherApp();
+            },
+            error => {
+                hideLoading();
+                if (error.code === error.PERMISSION_DENIED) {
+                    showError('Location access was denied. Please search for a city instead.');
+                } else {
+                    showError(`Location error: ${error.message}`);
+                }
+            },
+            { 
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+    }
+
+    // Get weather data by city name
+    async function getWeatherByCity(city) {
+        showLoading();
+        
         try {
-            const response = await fetch(`/get_weather`, {
+            const response = await fetch('/get_weather', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ city: city.name })
+                body: JSON.stringify({ city: city })
             });
             
             if (!response.ok) {
-                throw new Error(`Failed to fetch weather for ${city.name}`);
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fetch weather data');
+            }
+            
+            const data = await response.json();
+            currentData = data;
+            displayWeather(data);
+            cityInput.value = data.location.city || city;
+            
+            fetchHourlyForecast(data.location.coordinates.lat, data.location.coordinates.lon);
+        } catch (error) {
+            showError(error.message);
+            console.error('Fetch error:', error);
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Get weather data by coordinates
+    async function getWeatherByCoords(lat, lon) {
+        showLoading();
+        
+        try {
+            const response = await fetch(`/get_weather?lat=${lat}&lon=${lon}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fetch weather data');
+            }
+            
+            const data = await response.json();
+            currentData = data;
+            displayWeather(data);
+            cityInput.value = data.location.city || 'Current Location';
+            
+            fetchHourlyForecast(lat, lon);
+        } catch (error) {
+            showError(error.message || 'Failed to fetch weather data. Please try again.');
+            console.error('Fetch error:', error);
+        } finally {
+            hideLoading();
+        }
+    }
+
+    // Fetch hourly forecast data
+    async function fetchHourlyForecast(lat, lon) {
+        try {
+            const response = await fetch(`/get_hourly_forecast?lat=${lat}&lon=${lon}`);
+            if (!response.ok) {
+                console.error('Failed to fetch hourly forecast');
+                hourlyForecast.style.display = 'none';
+                return;
             }
             
             const data = await response.json();
             
-            if (!data.current || typeof data.current.temp !== 'number') {
-                throw new Error(`Invalid temperature data for ${city.name}`);
-            }
-            
-            const cityCard = document.createElement('div');
-            cityCard.className = 'city-card';
-            cityCard.innerHTML = `
-                <h3>${data.location.city}, ${data.location.country}</h3>
-                <div class="city-weather">
-                    <div class="city-temp">${Math.round(data.current.temp)}°C</div>
-                    <img class="city-icon" src="https://openweathermap.org/img/wn/${data.current.icon}@2x.png" alt="${data.current.description}">
-                </div>
-                <div>${data.current.description}</div>
-                <button class="city-select-btn"><i class="fas fa-cloud-sun"></i> View Weather</button>
-            `;
-            
-            cityCard.querySelector('.city-select-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                showWeatherApp();
-                displayWeather(data);
-                fetchHourlyForecast(data.location.coordinates.lat, data.location.coordinates.lon);
-            });
-            
-            cityCard.addEventListener('click', () => {
-                showWeatherApp();
-                displayWeather(data);
-                fetchHourlyForecast(data.location.coordinates.lat, data.location.coordinates.lon);
-            });
-            
-            popularCitiesGrid.appendChild(cityCard);
-        } catch (error) {
-            console.error(`Error loading weather for ${city.name}:`, error.message);
-            const failedCard = document.createElement('div');
-            failedCard.className = 'city-card';
-            failedCard.innerHTML = `
-                <h3>${city.name}, ${city.country}</h3>
-                <div style="color: var(--danger)">Failed to load weather</div>
-            `;
-            popularCitiesGrid.appendChild(failedCard);
-        }
-    }
-}
-
-// Show search interface
-function showSearchInterface() {
-    showWeatherApp();
-    cityInput.focus();
-}
-
-// Show weather app and hide welcome screen
-function showWeatherApp() {
-    welcomeScreen.style.display = 'none';
-    weatherApp.style.display = 'block';
-}
-
-// Get weather by city input
-function getWeatherByCityInput() {
-    const city = cityInput.value.trim();
-    if (!city) {
-        showError('Please enter a city name');
-        return;
-    }
-    getWeatherByCity(city);
-}
-
-// Get weather by current location
-function getWeatherByLocation() {
-    if (!navigator.geolocation) {
-        showError('Geolocation is not supported by your browser');
-        return;
-    }
-    
-    showLoading();
-    
-    navigator.geolocation.getCurrentPosition(
-        position => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            getWeatherByCoords(lat, lon);
-            showWeatherApp();
-        },
-        error => {
-            hideLoading();
-            if (error.code === error.PERMISSION_DENIED) {
-                showError('Location access was denied. Please search for a city instead.');
+            if (data.list && data.list.length > 0) {
+                displayHourlyForecast(data.list.slice(0, 24));
             } else {
-                showError(`Location error: ${error.message}`);
+                console.error('No hourly forecast data available');
+                hourlyForecast.style.display = 'none';
             }
-        },
-        { 
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
+        } catch (error) {
+            console.error('Error fetching hourly forecast:', error);
+            hourlyForecast.style.display = 'none';
         }
-    );
-}
+    }
 
-// Get weather data by city name
-async function getWeatherByCity(city) {
-    showLoading();
-    
-    try {
-        const response = await fetch('/get_weather', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ city: city })
+    // Display hourly forecast
+    function displayHourlyForecast(hourlyData) {
+        hourlyScroll.innerHTML = '';
+        hourlyForecast.style.display = 'block';
+        
+        const labels = [];
+        const temps = [];
+        const precip = [];
+        
+        hourlyData.forEach(hour => {
+            const time = new Date(hour.dt * 1000);
+            const timeString = time.getHours() + ':00';
+            const temp = hour.main.temp;
+            const pop = hour.pop || 0;
+            
+            const hourlyItem = document.createElement('div');
+            hourlyItem.className = 'hourly-item';
+            hourlyItem.innerHTML = `
+                <div class="hourly-time">${timeString}</div>
+                <img class="hourly-icon" src="https://openweathermap.org/img/wn/${hour.weather[0].icon}.png" alt="${hour.weather[0].description}">
+                <div class="hourly-temp">${useCelsius ? Math.round(temp) : Math.round(celsiusToFahrenheit(temp))}°</div>
+                <div class="hourly-pop">${Math.round(pop * 100)}%</div>
+            `;
+            hourlyScroll.appendChild(hourlyItem);
+            
+            labels.push(timeString);
+            temps.push(useCelsius ? temp : celsiusToFahrenheit(temp));
+            precip.push(pop * 100);
         });
         
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Failed to fetch weather data');
+        if (labels.length > 0) {
+            createWeatherChart(labels, temps, precip);
+        } else {
+            document.querySelector('.chart-container').style.display = 'none';
+        }
+    }
+
+    // Create weather chart
+    function createWeatherChart(labels, temps, precip) {
+        const ctx = document.getElementById('weather-chart').getContext('2d');
+        document.querySelector('.chart-container').style.display = 'block';
+        
+        if (weatherChart) {
+            weatherChart.destroy();
         }
         
-        const data = await response.json();
-        currentData = data;
-        displayWeather(data);
-        cityInput.value = data.location.city || city;
-        
-        fetchHourlyForecast(data.location.coordinates.lat, data.location.coordinates.lon);
-    } catch (error) {
-        showError(error.message);
-        console.error('Fetch error:', error);
-    } finally {
-        hideLoading();
+        weatherChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: `Temperature (°${useCelsius ? 'C' : 'F'})`,
+                        data: temps,
+                        borderColor: '#4361ee',
+                        backgroundColor: 'rgba(67, 97, 238, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Precipitation Chance (%)',
+                        data: precip,
+                        borderColor: '#4895ef',
+                        backgroundColor: 'rgba(72, 149, 239, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: `Temperature (°${useCelsius ? 'C' : 'F'})`
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        max: 100,
+                        min: 0,
+                        title: {
+                            display: true,
+                            text: 'Precipitation Chance (%)'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                }
+            }
+        });
     }
-}
 
-// Get weather data by coordinates
-async function getWeatherByCoords(lat, lon) {
-    showLoading();
-    
-    try {
-        const response = await fetch(`/get_weather?lat=${lat}&lon=${lon}`);
-        if (!response.ok) {
-            throw await response.json();
-        }
-        
-        const data = await response.json();
-        currentData = data;
-        displayWeather(data);
-        cityInput.value = data.location.city || 'Current Location';
-        
-        fetchHourlyForecast(lat, lon);
-    } catch (error) {
-        showError(error.error || 'Failed to fetch weather data. Please try again.');
-        console.error('Fetch error:', error);
-    } finally {
-        hideLoading();
-    }
-}
-
-// Fetch hourly forecast data
-async function fetchHourlyForecast(lat, lon) {
-    try {
-        const response = await fetch(`/get_hourly_forecast?lat=${lat}&lon=${lon}`);
-        if (!response.ok) {
-            console.error('Failed to fetch hourly forecast');
-            hourlyForecast.style.display = 'none';
+    // Display weather data
+    function displayWeather(data) {
+        if (!data || !data.current || !data.location) {
+            showError('Invalid weather data received');
             return;
         }
-        
-        const data = await response.json();
-        
-        if (data.list && data.list.length > 0) {
-            displayHourlyForecast(data.list.slice(0, 24));
-        } else {
-            console.error('No hourly forecast data available');
-            hourlyForecast.style.display = 'none';
+
+        errorMessage.style.display = 'none';
+        weatherContent.style.display = 'block';
+        weatherContent.classList.add('fade-in');
+
+        // Location info
+        document.getElementById('location').textContent = data.location.city;
+        if (data.location.state && data.location.state !== data.location.city) {
+            document.getElementById('location').textContent += `, ${data.location.state}`;
         }
-    } catch (error) {
-        console.error('Error fetching hourly forecast:', error);
-        hourlyForecast.style.display = 'none';
-    }
-}
+        document.getElementById('country-flag').textContent = 
+            data.location.country ? countryToFlag(data.location.country) : '';
+        document.getElementById('update-time').textContent = 
+            `Observed at ${data.current.observation_time || '--:--'}`;
 
-// Display hourly forecast
-function displayHourlyForecast(hourlyData) {
-    hourlyScroll.innerHTML = '';
-    hourlyForecast.style.display = 'block';
-    
-    const labels = [];
-    const temps = [];
-    const precip = [];
-    
-    hourlyData.forEach(hour => {
-        const time = new Date(hour.dt * 1000);
-        const timeString = time.getHours() + ':00';
-        const temp = hour.main?.temp ?? hour.temp;
-        const pop = hour.pop || 0;
-        
-        const hourlyItem = document.createElement('div');
-        hourlyItem.className = 'hourly-item';
-        hourlyItem.innerHTML = `
-            <div class="hourly-time">${timeString}</div>
-            <img class="hourly-icon" src="https://openweathermap.org/img/wn/${hour.weather[0].icon}.png" alt="${hour.weather[0].description}">
-            <div class="hourly-temp">${useCelsius ? Math.round(temp) : Math.round(celsiusToFahrenheit(temp))}°</div>
-            <div class="hourly-pop">${Math.round(pop * 100)}%</div>
-        `;
-        hourlyScroll.appendChild(hourlyItem);
-        
-        labels.push(timeString);
-        temps.push(useCelsius ? temp : celsiusToFahrenheit(temp));
-        precip.push(pop * 100);
-    });
-    
-    if (labels.length > 0) {
-        createWeatherChart(labels, temps, precip);
-    } else {
-        document.querySelector('.chart-container').style.display = 'none';
-    }
-}
-
-// Create weather chart
-function createWeatherChart(labels, temps, precip) {
-    const ctx = document.getElementById('weather-chart').getContext('2d');
-    document.querySelector('.chart-container').style.display = 'block';
-    
-    if (weatherChart) {
-        weatherChart.destroy();
-    }
-    
-    weatherChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: `Temperature (°${useCelsius ? 'C' : 'F'})`,
-                    data: temps,
-                    borderColor: '#4361ee',
-                    backgroundColor: 'rgba(67, 97, 238, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'Precipitation Chance (%)',
-                    data: precip,
-                    borderColor: '#4895ef',
-                    backgroundColor: 'rgba(72, 149, 239, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    yAxisID: 'y1'
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                }
-            },
-            scales: {
-                y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    title: {
-                        display: true,
-                        text: `Temperature (°${useCelsius ? 'C' : 'F'})`
-                    }
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    max: 100,
-                    min: 0,
-                    title: {
-                        display: true,
-                        text: 'Precipitation Chance (%)'
-                    },
-                    grid: {
-                        drawOnChartArea: false
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Display weather data
-function displayWeather(data) {
-    if (!data || !data.current || !data.location) {
-        showError('Invalid weather data received');
-        return;
-    }
-
-    errorMessage.style.display = 'none';
-    weatherContent.style.display = 'block';
-    weatherContent.classList.add('fade-in');
-
-    // Location info
-    document.getElementById('location').textContent = data.location.city;
-    if (data.location.state && data.location.state !== data.location.city) {
-        document.getElementById('location').textContent += `, ${data.location.state}`;
-    }
-    document.getElementById('country-flag').textContent = 
-        data.location.country ? countryToFlag(data.location.country) : '';
-    document.getElementById('update-time').textContent = 
-        `Observed at ${formatTime(data.current.observation_time || new Date().toLocaleTimeString())}`;
-
-    // Update temperature display
-    updateTemperatureDisplay();
-
-    // Weather icon
-    const iconUrl = `https://openweathermap.org/img/wn/${data.current.icon}@2x.png`;
-    const weatherIcon = document.getElementById('weather-icon');
-    weatherIcon.src = iconUrl;
-    weatherIcon.alt = data.current.description || 'Weather icon';
-
-    // Weather details
-    document.getElementById('weather-desc').textContent = 
-        data.current.description ? capitalizeFirstLetter(data.current.description) : '--';
-    document.getElementById('humidity').textContent = 
-        data.current.humidity ? `${data.current.humidity}%` : '--%';
-    document.getElementById('wind').textContent = 
-        data.current.wind ? `${data.current.wind} km/h` : '-- km/h';
-    document.getElementById('pressure').textContent = 
-        data.current.pressure ? `${data.current.pressure} hPa` : '-- hPa';
-    document.getElementById('visibility').textContent = 
-        data.current.visibility ? `${data.current.visibility} km` : '-- km';
-    document.getElementById('sunrise').textContent = 
-        data.current.sunrise || '--:--';
-    document.getElementById('sunset').textContent = 
-        data.current.sunset || '--:--';
-
-    // Air quality
-    const aqiElement = document.getElementById('air-quality');
-    if (data.air_quality && data.air_quality.aqi) {
-        aqiElement.innerHTML = `
-            <span class="aqi-indicator ${aqiToColor(data.air_quality.aqi)}"></span>
-            ${aqiToText(data.air_quality.aqi)} (${data.air_quality.aqi})
-        `;
-    } else {
-        aqiElement.textContent = 'Not available';
-    }
-
-    // Coordinates
-    document.getElementById('coordinates').textContent = 
-        data.location.coordinates ? 
-        `${data.location.coordinates.lat.toFixed(4)}°N, ${data.location.coordinates.lon.toFixed(4)}°E` : 
-        '--';
-
-    // Last updated
-    document.getElementById('last-updated').textContent = 
-        `Last updated: ${new Date(data.timestamp || Date.now()).toLocaleString()}`;
-
-    // Forecast
-    const forecastContainer = document.getElementById('forecast-days');
-    forecastContainer.innerHTML = '';
-    
-    if (data.forecast && data.forecast.length > 0) {
-        data.forecast.forEach(day => {
-            const dayElement = document.createElement('div');
-            dayElement.className = 'forecast-day';
-            dayElement.innerHTML = `
-                <div class="forecast-day-name">${day.day_name || '--'}</div>
-                <img class="forecast-icon" src="https://openweathermap.org/img/wn/${day.icon || '01d'}@2x.png" alt="${day.main_condition || ''}">
-                <div class="forecast-temp">
-                    <span class="forecast-temp-max">${useCelsius ? (day.temp_max || '--') : celsiusToFahrenheit(day.temp_max || 0)}°</span>
-                    <span class="forecast-temp-min">${useCelsius ? (day.temp_min || '--') : celsiusToFahrenheit(day.temp_min || 0)}°</span>
-                </div>
-                <div class="forecast-condition">${day.main_condition ? capitalizeFirstLetter(day.main_condition) : ''}</div>
-            `;
-            forecastContainer.appendChild(dayElement);
-        });
-    }
-}
-
-// Set temperature unit (Celsius or Fahrenheit)
-function setTemperatureUnit(useC) {
-    useCelsius = useC;
-    celsiusBtn.classList.toggle('active', useCelsius);
-    fahrenheitBtn.classList.toggle('active', !useCelsius);
-    
-    if (currentData) {
+        // Update temperature display
         updateTemperatureDisplay();
-        if (currentData.hourly) {
-            const labels = [];
-            const temps = [];
-            const precip = [];
-            
-            currentData.hourly.forEach(hour => {
-                const time = new Date(hour.dt * 1000);
-                const timeString = time.getHours() + ':00';
-                const temp = hour.main?.temp ?? hour.temp;
-                const pop = hour.pop || 0;
-                
-                labels.push(timeString);
-                temps.push(useCelsius ? temp : celsiusToFahrenheit(temp));
-                precip.push(pop * 100);
+
+        // Weather icon
+        const iconUrl = `https://openweathermap.org/img/wn/${data.current.icon}@2x.png`;
+        const weatherIcon = document.getElementById('weather-icon');
+        weatherIcon.src = iconUrl;
+        weatherIcon.alt = data.current.description || 'Weather icon';
+
+        // Weather details
+        document.getElementById('weather-desc').textContent = 
+            data.current.description ? capitalizeFirstLetter(data.current.description) : '--';
+        document.getElementById('humidity').textContent = 
+            data.current.humidity ? `${data.current.humidity}%` : '--%';
+        document.getElementById('wind').textContent = 
+            data.current.wind ? `${data.current.wind} km/h` : '-- km/h';
+        document.getElementById('pressure').textContent = 
+            data.current.pressure ? `${data.current.pressure} hPa` : '-- hPa';
+        document.getElementById('visibility').textContent = 
+            data.current.visibility ? `${data.current.visibility} km` : '-- km';
+        document.getElementById('sunrise').textContent = 
+            data.current.sunrise || '--:--';
+        document.getElementById('sunset').textContent = 
+            data.current.sunset || '--:--';
+
+        // Air quality
+        const aqiElement = document.getElementById('air-quality');
+        if (data.air_quality && data.air_quality.aqi) {
+            aqiElement.innerHTML = `
+                <span class="aqi-indicator ${aqiToColor(data.air_quality.aqi)}"></span>
+                ${aqiToText(data.air_quality.aqi)} (${data.air_quality.aqi})
+            `;
+        } else {
+            aqiElement.textContent = 'Not available';
+        }
+
+        // Coordinates
+        document.getElementById('coordinates').textContent = 
+            data.location.coordinates ? 
+            `${data.location.coordinates.lat.toFixed(4)}°N, ${data.location.coordinates.lon.toFixed(4)}°E` : 
+            '--';
+
+        // Last updated
+        document.getElementById('last-updated').textContent = 
+            `Last updated: ${new Date(data.timestamp || Date.now()).toLocaleString()}`;
+
+        // Forecast
+        const forecastContainer = document.getElementById('forecast-days');
+        forecastContainer.innerHTML = '';
+        
+        if (data.forecast && data.forecast.length > 0) {
+            data.forecast.forEach(day => {
+                const dayElement = document.createElement('div');
+                dayElement.className = 'forecast-day';
+                dayElement.innerHTML = `
+                    <div class="forecast-day-name">${day.day_name || '--'}</div>
+                    <img class="forecast-icon" src="https://openweathermap.org/img/wn/${day.icon || '01d'}@2x.png" alt="${day.main_condition || ''}">
+                    <div class="forecast-temp">
+                        <span class="forecast-temp-max">${useCelsius ? (day.temp_max || '--') : celsiusToFahrenheit(day.temp_max || 0)}°</span>
+                        <span class="forecast-temp-min">${useCelsius ? (day.temp_min || '--') : celsiusToFahrenheit(day.temp_min || 0)}°</span>
+                    </div>
+                    <div class="forecast-condition">${day.main_condition ? capitalizeFirstLetter(day.main_condition) : ''}</div>
+                `;
+                forecastContainer.appendChild(dayElement);
             });
-            
-            if (labels.length > 0) {
-                createWeatherChart(labels, temps, precip);
-            }
         }
     }
-}
 
-// Update temperature display based on current unit
-function updateTemperatureDisplay() {
-    if (!currentData) return;
-    
-    const tempElement = document.getElementById('temp');
-    const feelsLikeElement = document.getElementById('feels-like');
-    
-    if (useCelsius) {
-        tempElement.textContent = `${currentData.current.temp}°`;
-        feelsLikeElement.textContent = `${currentData.current.feels_like}°`;
-    } else {
-        tempElement.textContent = `${celsiusToFahrenheit(currentData.current.temp)}°`;
-        feelsLikeElement.textContent = `${celsiusToFahrenheit(currentData.current.feels_like)}°`;
+    // Set temperature unit (Celsius or Fahrenheit)
+    function setTemperatureUnit(useC) {
+        useCelsius = useC;
+        celsiusBtn.classList.toggle('active', useCelsius);
+        fahrenheitBtn.classList.toggle('active', !useCelsius);
+        
+        if (currentData) {
+            updateTemperatureDisplay();
+        }
     }
-    
-    const forecastMaxTemps = document.querySelectorAll('.forecast-temp-max');
-    const forecastMinTemps = document.querySelectorAll('.forecast-temp-min');
-    
-    if (currentData.forecast) {
-        currentData.forecast.forEach((day, index) => {
-            if (forecastMaxTemps[index] && forecastMinTemps[index]) {
-                forecastMaxTemps[index].textContent = 
-                    `${useCelsius ? day.temp_max : celsiusToFahrenheit(day.temp_max)}°`;
-                forecastMinTemps[index].textContent = 
-                    `${useCelsius ? day.temp_min : celsiusToFahrenheit(day.temp_min)}°`;
-            }
-        });
-    }
-    
-    const hourlyItems = document.querySelectorAll('.hourly-item');
-    if (hourlyItems.length > 0 && currentData.hourly) {
-        currentData.hourly.forEach((hour, index) => {
-            if (hourlyItems[index]) {
-                const temp = hour.main?.temp ?? hour.temp;
-                if (typeof temp === 'number' && !isNaN(temp)) {
-                    const tempElement = hourlyItems[index].querySelector('.hourly-temp');
-                    if (tempElement) {
-                        tempElement.textContent = 
-                            `${useCelsius ? Math.round(temp) : Math.round(celsiusToFahrenheit(temp))}°`;
-                    }
+
+    // Update temperature display based on current unit
+    function updateTemperatureDisplay() {
+        if (!currentData) return;
+        
+        const tempElement = document.getElementById('temp');
+        const feelsLikeElement = document.getElementById('feels-like');
+        
+        if (useCelsius) {
+            tempElement.textContent = `${currentData.current.temp}°`;
+            feelsLikeElement.textContent = `${currentData.current.feels_like}°`;
+        } else {
+            tempElement.textContent = `${celsiusToFahrenheit(currentData.current.temp)}°`;
+            feelsLikeElement.textContent = `${celsiusToFahrenheit(currentData.current.feels_like)}°`;
+        }
+        
+        const forecastMaxTemps = document.querySelectorAll('.forecast-temp-max');
+        const forecastMinTemps = document.querySelectorAll('.forecast-temp-min');
+        
+        if (currentData.forecast) {
+            currentData.forecast.forEach((day, index) => {
+                if (forecastMaxTemps[index] && forecastMinTemps[index]) {
+                    forecastMaxTemps[index].textContent = 
+                        `${useCelsius ? day.temp_max : celsiusToFahrenheit(day.temp_max)}°`;
+                    forecastMinTemps[index].textContent = 
+                        `${useCelsius ? day.temp_min : celsiusToFahrenheit(day.temp_min)}°`;
                 }
-            }
-        });
+            });
+        }
+        
+        const hourlyItems = document.querySelectorAll('.hourly-item');
+        if (hourlyItems.length > 0) {
+            hourlyItems.forEach((item, index) => {
+                const tempElement = item.querySelector('.hourly-temp');
+                if (tempElement) {
+                    // Recreate the hourly items with new temperature unit
+                    const time = item.querySelector('.hourly-time').textContent;
+                    const icon = item.querySelector('.hourly-icon').src;
+                    const pop = item.querySelector('.hourly-pop').textContent;
+                    
+                    item.querySelector('.hourly-temp').textContent = 
+                        tempElement.textContent.replace(/\d+°/, 
+                            useCelsius ? 
+                            Math.round(celsiusToFahrenheit(parseInt(tempElement.textContent))) + '°' :
+                            Math.round((parseInt(tempElement.textContent) - 32) * 5/9) + '°'
+                        );
+                }
+            });
+        }
     }
-}
 
-// Helper function to capitalize first letter
-function capitalizeFirstLetter(string) {
-    return string.charAt(0).toUpperCase() + string.slice(1);
-}
-
-// Helper function to format time
-function formatTime(timeString) {
-    if (!timeString) return '--:--';
-    try {
-        const time = new Date(timeString);
-        return time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch {
-        return timeString;
+    // Helper function to capitalize first letter
+    function capitalizeFirstLetter(string) {
+        if (!string) return '';
+        return string.charAt(0).toUpperCase() + string.slice(1);
     }
-}
 
-function countryToFlag(countryCode) {
-    return countryCode.toUpperCase().replace(/./g, char => 
-        String.fromCodePoint(127397 + char.charCodeAt()));
-}
-
-function aqiToColor(aqi) {
-    switch(aqi) {
-        case 1: return 'aqi-good';
-        case 2: return 'aqi-fair';
-        case 3: return 'aqi-moderate';
-        case 4: return 'aqi-poor';
-        case 5: return 'aqi-very-poor';
-        default: return '';
+    function countryToFlag(countryCode) {
+        if (!countryCode) return '';
+        return countryCode.toUpperCase().replace(/./g, char => 
+            String.fromCodePoint(127397 + char.charCodeAt()));
     }
-}
 
-function aqiToText(aqi) {
-    switch(aqi) {
-        case 1: return 'Good';
-        case 2: return 'Fair';
-        case 3: return 'Moderate';
-        case 4: return 'Poor';
-        case 5: return 'Very Poor';
-        default: return 'Unknown';
+    function aqiToColor(aqi) {
+        switch(aqi) {
+            case 1: return 'aqi-good';
+            case 2: return 'aqi-fair';
+            case 3: return 'aqi-moderate';
+            case 4: return 'aqi-poor';
+            case 5: return 'aqi-very-poor';
+            default: return '';
+        }
     }
-}
 
-function celsiusToFahrenheit(c) {
-    return (c * 9/5) + 32;
-}
+    function aqiToText(aqi) {
+        switch(aqi) {
+            case 1: return 'Good';
+            case 2: return 'Fair';
+            case 3: return 'Moderate';
+            case 4: return 'Poor';
+            case 5: return 'Very Poor';
+            default: return 'Unknown';
+        }
+    }
 
-function showLoading() {
-    weatherContent.style.display = 'none';
-    errorMessage.style.display = 'none';
-    loadingIndicator.style.display = 'block';
-    searchBtn.disabled = true;
-    locationBtn.disabled = true;
-}
+    function celsiusToFahrenheit(c) {
+        return (c * 9/5) + 32;
+    }
 
-function hideLoading() {
-    loadingIndicator.style.display = 'none';
-    searchBtn.disabled = false;
-    locationBtn.disabled = false;
-}
+    function showLoading() {
+        weatherContent.style.display = 'none';
+        errorMessage.style.display = 'none';
+        loadingIndicator.style.display = 'block';
+        searchBtn.disabled = true;
+        locationBtn.disabled = true;
+    }
 
-function showError(message) {
-    errorMessage.textContent = message;
-    errorMessage.style.display = 'block';
-    weatherContent.style.display = 'none';
-    hideLoading();
-}
-    </script>
+    function hideLoading() {
+        loadingIndicator.style.display = 'none';
+        searchBtn.disabled = false;
+        locationBtn.disabled = false;
+    }
+
+    function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+        weatherContent.style.display = 'none';
+        hideLoading();
+    }
+
+    // Make getWeatherByCity available globally for retry buttons
+    window.getWeatherByCity = getWeatherByCity;
+</script>
 </body>
 </html>
+
 
